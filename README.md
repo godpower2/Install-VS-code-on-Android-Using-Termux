@@ -25,19 +25,24 @@ A robust, user-friendly script to install Visual Studio Code in Termux's PRoot-D
 
 ## Quick Start
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/vscode-termux-installer.git
-```
-
-2. Enter Debian environment:
+1. Enter Debian environment:
 ```bash
 proot-distro login debian
 ```
 
+** must install git first **
+```bash
+apt update && apt install git -y
+```
+
+2. Clone the repository:
+```bash
+git clone https://github.com/godpower2/Install-VS-code-on-Android-Using-Termux vscode 
+```
+
 3. Navigate to script directory:
 ```bash
-cd vscode-termux-installer
+cd vscode
 ```
 
 4. Make script executable:
