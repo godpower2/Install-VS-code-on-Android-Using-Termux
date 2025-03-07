@@ -65,7 +65,7 @@ print_warning() {
 
 # Function to check command existence
 check_command() {
-    if ! command -v $1 &> /dev/null; then
+    if ! command -v $1 &>/dev/null; then
         print_error "$1 is not installed."
         return 1
     fi
@@ -82,9 +82,9 @@ handle_error() {
 # Function to check internet connection
 check_internet() {
     print_status "Checking internet connection..."
-    if ! curl -s --connect-timeout 5 https://packages.microsoft.com > /dev/null; then
+    if ! curl -s --connect-timeout 5 https://packages.microsoft.com >/dev/null; then
         # First attempt failed, try debian.org as backup
-        if ! curl -s --connect-timeout 5 https://deb.debian.org > /dev/null; then
+        if ! curl -s --connect-timeout 5 https://deb.debian.org >/dev/null; then
             print_error "No internet connection!"
             print_warning "Please check your internet connection and try again."
             return 1
@@ -104,18 +104,18 @@ get_architecture() {
 get_vscode_url() {
     local arch=$1
     case $arch in
-        amd64|x86_64)
-            echo "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
-            ;;
-        arm64|aarch64)
-            echo "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-arm64"
-            ;;
-        armhf|armv7l)
-            echo "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-armhf"
-            ;;
-        *)
-            echo ""
-            ;;
+    amd64 | x86_64)
+        echo "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
+        ;;
+    arm64 | aarch64)
+        echo "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-arm64"
+        ;;
+    armhf | armv7l)
+        echo "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-armhf"
+        ;;
+    *)
+        echo ""
+        ;;
     esac
 }
 
@@ -124,29 +124,29 @@ ask_user() {
     echo -e "\n${BOLD}${CYAN}$1 (y/n)${NC}"
     read -r choice
     case $choice in
-        [Yy]* ) return 0;;
-        * ) return 1;;
+    [Yy]*) return 0 ;;
+    *) return 1 ;;
     esac
 }
 
 # Function to install and setup GitHub CLI
 setup_github_cli() {
     print_header "Setting up GitHub CLI"
-    
+
     print_status "Installing GitHub CLI..."
     # Add GitHub CLI repository
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-    
-    # Update and install gh
-    apt update
-    apt install -y gh
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
 
-    if ! command -v gh &> /dev/null; then
+    # Update and install gh
+    sudo apt update
+    sudo apt install -y gh
+
+    if ! command -v gh &>/dev/null; then
         print_error "GitHub CLI installation failed!"
         return 1
     fi
-    
+
     print_success "GitHub CLI installed successfully!"
     return 0
 }
@@ -154,28 +154,28 @@ setup_github_cli() {
 # Function to handle GitHub token authentication
 github_token_auth() {
     print_header "GitHub Authentication"
-    
+
     print_status "To authenticate with GitHub, you'll need a Personal Access Token"
     print_substatus "You can create one at: ${UNDERLINE}https://github.com/settings/tokens${NC}"
     print_substatus "Required scopes: repo, read:org, workflow"
-    
+
     echo -e "\n${BOLD}${CYAN}Would you like to enter your GitHub token now? (y/n)${NC}"
     read -r token_choice
-    
+
     if [[ $token_choice =~ ^[Yy]$ ]]; then
         echo -e "\n${BOLD}${YELLOW}Enter your GitHub token:${NC} "
         read -r github_token
-        
+
         if [ -n "$github_token" ]; then
             # Configure GitHub CLI with token
             echo "$github_token" | gh auth login --with-token
             if [ $? -eq 0 ]; then
                 print_success "Successfully authenticated with GitHub!"
-                
+
                 # Test the authentication
-                if gh auth status &> /dev/null; then
+                if gh auth status &>/dev/null; then
                     print_success "GitHub connection verified!"
-                    
+
                     # Configure git credentials
                     git config --global credential.helper store
                     print_success "Git credentials configured!"
@@ -198,26 +198,26 @@ github_token_auth() {
 # Automated keyring setup function
 setup_keyring_automated() {
     print_header "Setting up GNOME Keyring"
-    
+
     print_status "Configuring GNOME Keyring..."
-    
+
     # Create keyring directories
     print_substatus "Creating keyring directories..."
     mkdir -p ~/.local/share/keyrings
     mkdir -p ~/.config/systemd/user/
-    
+
     # Start keyring daemon
     print_substatus "Starting keyring daemon..."
     dbus-launch gnome-keyring-daemon --start --components=secrets,ssh
-    
+
     # Create default keyring with empty password
     print_substatus "Creating default keyring..."
     echo -n "" | gnome-keyring-daemon --unlock
-    
+
     # Add environment setup to bashrc
     print_substatus "Configuring environment..."
     if ! grep -q "gnome-keyring-daemon" ~/.bashrc; then
-        cat >> ~/.bashrc << 'EOF'
+        cat >>~/.bashrc <<'EOF'
 
 # GNOME Keyring environment setup
 if [ -n "$DESKTOP_SESSION" ]; then
@@ -230,7 +230,7 @@ EOF
     fi
 
     # Create systemd service
-    cat > ~/.config/systemd/user/gnome-keyring-daemon.service << 'EOF'
+    cat >~/.config/systemd/user/gnome-keyring-daemon.service <<'EOF'
 [Unit]
 Description=GNOME Keyring Daemon
 [Service]
@@ -288,7 +288,7 @@ post_installation_setup() {
 
     # Offer to create basic VSCode settings
     if ask_user "Would you like to create recommended VSCode settings?"; then
-        cat > ~/.config/Code/User/settings.json << 'EOF'
+        cat >~/.config/Code/User/settings.json <<'EOF'
 {
     "editor.fontSize": 14,
     "editor.formatOnSave": true,
@@ -313,8 +313,8 @@ EOF
     echo -e "  ${BOLD}1.${NC} Start VSCode:              ${CYAN}code${NC}"
     echo -e "  ${BOLD}2.${NC} Start with no sandbox:     ${CYAN}code --no-sandbox${NC}"
     echo -e "  ${BOLD}3.${NC} Enable GitHub Copilot:     ${CYAN}code --enable-proposed-api=github.copilot${NC}"
-    
-    if pgrep -x "gnome-keyring-d" > /dev/null; then
+
+    if pgrep -x "gnome-keyring-d" >/dev/null; then
         echo -e "\n${BOLD}${GREEN}GNOME Keyring Status:${NC} Running ✓"
     else
         echo -e "\n${BOLD}${YELLOW}GNOME Keyring Status:${NC} Not Running !"
@@ -322,7 +322,7 @@ EOF
     fi
 
     # Show GitHub status if CLI is installed
-    if command -v gh &> /dev/null; then
+    if command -v gh &>/dev/null; then
         echo -e "\n${BOLD}${PURPLE}GitHub Status:${NC}"
         gh auth status 2>&1 | while read -r line; do
             echo -e "  ${BOLD}•${NC} $line"
@@ -334,7 +334,7 @@ EOF
     echo -e "  ${BOLD}•${NC} VSCode Version: $(code --version 2>/dev/null | head -n1 || echo "Not found")"
     echo -e "  ${BOLD}•${NC} Architecture: $(dpkg --print-architecture)"
     echo -e "  ${BOLD}•${NC} Memory: $(free -h | awk '/^Mem:/ {print $2}')"
-    
+
     # Add troubleshooting tips
     echo -e "\n${BOLD}${YELLOW}Troubleshooting Tips:${NC}"
     echo -e "  ${BOLD}•${NC} If GitHub login fails:    ${CYAN}gh auth login --with-token${NC}"
@@ -348,7 +348,7 @@ install_from_repo() {
 
     # Add Microsoft GPG key
     print_status "🔑 Adding Microsoft GPG key..."
-    if ! sudo wget -qO- https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor > packages.microsoft.gpg; then
+    if ! sudo wget -qO- https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor >packages.microsoft.gpg; then
         handle_error "Failed to add Microsoft GPG key"
         return 1
     fi
@@ -375,7 +375,7 @@ install_from_repo() {
 # Function to check .deb file validity and version
 check_deb_file() {
     local deb_file=$1
-    
+
     # First check if file exists and is a valid .deb
     if [[ ! -f "$deb_file" ]] || ! dpkg-deb -I "$deb_file" &>/dev/null; then
         return 1
@@ -385,7 +385,7 @@ check_deb_file() {
     local pkg_name=$(dpkg-deb -f "$deb_file" Package)
     local pkg_version=$(dpkg-deb -f "$deb_file" Version)
     local pkg_arch=$(dpkg-deb -f "$deb_file" Architecture)
-    
+
     if [[ "$pkg_name" == "code" ]]; then
         print_success "Found valid VSCode package:"
         print_substatus "Version: ${CYAN}${pkg_version}${NC}"
@@ -398,10 +398,10 @@ check_deb_file() {
 handle_existing_deb() {
     local deb_file="vscode.deb"
     local arch=$(dpkg --print-architecture)
-    
+
     if [[ -f "$deb_file" ]]; then
         print_header "Existing VSCode Package Found"
-        
+
         if check_deb_file "$deb_file"; then
             while true; do
                 echo -e "\n${BOLD}${CYAN}Would you like to:${NC}"
@@ -409,36 +409,36 @@ handle_existing_deb() {
                 echo -e "  ${BOLD}2.${NC} Download fresh copy"
                 echo -e "  ${BOLD}3.${NC} View detailed package info"
                 echo -e "  ${BOLD}q.${NC} Quit installation"
-                
+
                 read -r -p "Enter choice [1-3/q]: " choice
-                
+
                 case $choice in
-                    1)
-                        print_status "Proceeding with existing package..."
-                        return 0
-                        ;;
-                    2)
-                        print_status "Will download fresh copy..."
-                        rm -f "$deb_file"
-                        return 1
-                        ;;
-                    3)
-                        clear
-                        print_header "Package Details"
-                        dpkg-deb -I "$deb_file" | while read -r line; do
-                            echo -e " ${BOLD}${CYAN}>${NC} $line"
-                        done
-                        echo -e "\nPress Enter to continue..."
-                        read -r
-                        clear
-                        ;;
-                    q|Q)
-                        print_warning "Installation cancelled by user"
-                        exit 0
-                        ;;
-                    *)
-                        print_error "Invalid choice. Please try again."
-                        ;;
+                1)
+                    print_status "Proceeding with existing package..."
+                    return 0
+                    ;;
+                2)
+                    print_status "Will download fresh copy..."
+                    rm -f "$deb_file"
+                    return 1
+                    ;;
+                3)
+                    clear
+                    print_header "Package Details"
+                    dpkg-deb -I "$deb_file" | while read -r line; do
+                        echo -e " ${BOLD}${CYAN}>${NC} $line"
+                    done
+                    echo -e "\nPress Enter to continue..."
+                    read -r
+                    clear
+                    ;;
+                q | Q)
+                    print_warning "Installation cancelled by user"
+                    exit 0
+                    ;;
+                *)
+                    print_error "Invalid choice. Please try again."
+                    ;;
                 esac
             done
         else
@@ -460,22 +460,22 @@ handle_existing_deb() {
 # Function for .deb based installation
 install_from_deb() {
     print_header "Installing Visual Studio Code"
-    
+
     local arch=$(dpkg --print-architecture)
     local download_url=$(get_vscode_url "$arch")
-    
+
     # Handle existing .deb file
     if handle_existing_deb; then
         print_status "Using existing vscode.deb file"
     else
         print_status "Downloading VSCode for $arch architecture..."
         print_substatus "URL: $download_url"
-        
+
         if ! wget --progress=bar:force:noscroll "$download_url" -O vscode.deb; then
             print_error "Download failed!"
             return 1
         fi
-        
+
         # Verify downloaded file
         if ! check_deb_file "vscode.deb"; then
             print_error "Downloaded file is invalid!"
@@ -486,10 +486,10 @@ install_from_deb() {
 
     # Continue with installation...
     print_status "Installing VSCode package..."
-    if ! dpkg -i vscode.deb; then
+    if ! sudo dpkg -i vscode.deb; then
         print_warning "Fixing dependencies..."
-        apt --fix-broken install -y
-        if ! dpkg -i vscode.deb; then
+        sudo apt --fix-broken install -y
+        if ! sudo dpkg -i vscode.deb; then
             print_error "Installation failed!"
             return 1
         fi
@@ -497,7 +497,7 @@ install_from_deb() {
 
     # Setup keyring automatically
     setup_keyring_automated
-    
+
     # Offer GitHub setup
     post_installation_setup
 }
@@ -505,7 +505,7 @@ install_from_deb() {
 # Function to create new user
 create_user() {
     print_header "🔐 User Account Setup"
-    
+
     # Check if sudo is installed
     if ! command -v sudo &>/dev/null; then
         print_status "📦 Installing sudo package..."
@@ -515,7 +515,7 @@ create_user() {
     while true; do
         echo -e "\n${BOLD}${CYAN}👤 Enter username (lowercase, no spaces):${NC}"
         read -r username
-        
+
         # Validate username
         if [[ ! "$username" =~ ^[a-z][a-z0-9-]{2,}$ ]]; then
             print_error "❌ Invalid username format!"
@@ -525,73 +525,73 @@ create_user() {
             echo -e "  ${BOLD}•${NC} Be at least 3 characters long"
             continue
         fi
-        
+
         # Check if user already exists
         if id "$username" &>/dev/null; then
             print_error "❌ User '$username' already exists!"
             continue
         fi
-        
+
         # Get password with minimum 6 characters
         while true; do
             echo -e "\n${BOLD}${CYAN}🔑 Enter password for $username (min. 6 characters):${NC}"
             read -r password
             echo -e "${BOLD}${CYAN}🔄 Confirm password:${NC}"
             read -r password2
-            
+
             if [ "$password" != "$password2" ]; then
                 print_error "❌ Passwords don't match!"
                 continue
             fi
-            
+
             if [ ${#password} -lt 6 ]; then
                 print_error "❌ Password must be at least 6 characters!"
                 continue
             fi
             break
         done
-        
+
         # Create user with home directory
         print_status "👥 Creating user account..."
         useradd -m -s /bin/bash "$username"
         echo "$username:$password" | chpasswd
-        
+
         # Setup sudo access
         print_status "🔑 Setting up sudo access..."
         usermod -aG sudo "$username"
-        
+
         # Configure sudoers
         echo -e "\n${BOLD}${CYAN}🔐 Allow sudo commands without password? [Y/n]:${NC}"
         read -r sudo_nopass
         case $sudo_nopass in
-            [Nn]* ) 
-                echo "$username ALL=(ALL:ALL) ALL" >> /etc/sudoers
-                ;;
-            * ) 
-                echo "$username ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-                ;;
+        [Nn]*)
+            echo "$username ALL=(ALL:ALL) ALL" >>/etc/sudoers
+            ;;
+        *)
+            echo "$username ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers
+            ;;
         esac
-        
+
         # Copy script to new user's home
         local script_path=$(readlink -f "$0")
         local script_name=$(basename "$script_path")
         local user_home="/home/$username"
-        
+
         print_status "📋 Copying installation script..."
         cp "$script_path" "$user_home/$script_name"
         chown "$username:$username" "$user_home/$script_name"
         chmod +x "$user_home/$script_name"
-        
+
         # Fix hostname resolution
         hostname=$(hostname)
-        echo "127.0.0.1 $hostname" >> /etc/hosts
-        
+        echo "127.0.0.1 $hostname" >>/etc/hosts
+
         print_success "✅ User account created successfully!"
         echo -e "\n${BOLD}${CYAN}📝 Account Details:${NC}"
         echo -e "  ${BOLD}•${NC} Username: ${GREEN}$username${NC}"
         echo -e "  ${BOLD}•${NC} Password: ${GREEN}$password${NC}"
         echo -e "  ${BOLD}•${NC} Sudo access: ${GREEN}Yes${NC}"
-        
+
         # Switch to new user
         print_status "👤 Switching to user $username..."
         cd "$user_home"
@@ -603,7 +603,7 @@ create_user() {
 # Check user environment
 check_environment() {
     print_header "🔍 Environment Check"
-    
+
     # Check if running as root
     if [[ $EUID -eq 0 ]]; then
         while true; do
@@ -614,29 +614,29 @@ check_environment() {
             echo -e "  ${BOLD}[Q]${NC} ❌ Quit\n"
             echo -e "${BOLD}${CYAN}Enter your choice [1/2/Q]:${NC} "
             read -r choice
-            
-            case ${choice,,} in  # Convert to lowercase
-                1|"one"|"create"|"user")
-                    create_user
-                    break
-                    ;;
-                2|"two"|"root"|"continue")
-                    print_warning "⚠️  Continuing as root..."
-                    break
-                    ;;
-                q|"quit"|"exit"|"")
-                    print_status "👋 Installation cancelled"
-                    exit 0
-                    ;;
-                *)
-                    print_error "❌ Invalid choice! Please try again."
-                    sleep 1
-                    clear
-                    ;;
+
+            case ${choice,,} in # Convert to lowercase
+            1 | "one" | "create" | "user")
+                create_user
+                break
+                ;;
+            2 | "two" | "root" | "continue")
+                print_warning "⚠️  Continuing as root..."
+                break
+                ;;
+            q | "quit" | "exit" | "")
+                print_status "👋 Installation cancelled"
+                exit 0
+                ;;
+            *)
+                print_error "❌ Invalid choice! Please try again."
+                sleep 1
+                clear
+                ;;
             esac
         done
     fi
-    
+
     # Check for sudo access
     if ! sudo -v &>/dev/null; then
         print_error "❌ You don't have sudo privileges!"
@@ -667,39 +667,39 @@ install_vscode() {
 
     # Update package lists
     print_status "Updating package lists..."
-    if ! apt update; then
+    if ! sudo apt update; then
         handle_error "Failed to update package lists"
         print_warning "Trying to fix package lists..."
-        rm -f /var/lib/apt/lists/* && apt update
+        rm -f /var/lib/apt/lists/* && sudo apt update
     fi
 
     # Install required dependencies
     print_status "Installing required dependencies..."
     local dependencies=(
         # Core utilities
-        "apt-transport-https"  # HTTPS transport for apt
-        "ca-certificates"      # SSL certificates
-        "curl"                 # URL data transfer tool
+        "apt-transport-https" # HTTPS transport for apt
+        "ca-certificates"     # SSL certificates
+        "curl"                # URL data transfer tool
         "git"                 # Version control system
         "gnome-keyring"       # Password/key manager
         "gpg"                 # GNU Privacy Guard
         "wget"                # File download utility
 
         # Libraries
-        "libatk1.0-0"         # Accessibility toolkit
-        "libgbm1"             # Graphics buffer manager
-        "libgtk-3-0"          # GUI toolkit
-        "libnss3"             # Network Security Services
-        "libsecret-1-0"       # Secret storage
-    )   
+        "libatk1.0-0"   # Accessibility toolkit
+        "libgbm1"       # Graphics buffer manager
+        "libgtk-3-0"    # GUI toolkit
+        "libnss3"       # Network Security Services
+        "libsecret-1-0" # Secret storage
+    )
 
     for dep in "${dependencies[@]}"; do
         print_info "Installing $dep..."
-        if ! apt install -y "$dep"; then
+        if ! sudo apt install -y "$dep"; then
             handle_error "Failed to install $dep"
             print_warning "Retrying installation of $dep..."
-            apt --fix-broken install -y
-            apt install -y "$dep"
+            sudo apt --fix-broken install -y
+            sudo apt install -y "$dep"
         fi
     done
 
@@ -713,17 +713,17 @@ install_vscode() {
         read -p "Enter your choice (1 or 2): " install_choice
 
         case $install_choice in
-            1)
-                install_from_repo
-                break
-                ;;
-            2)
-                install_from_deb
-                break
-                ;;
-            *)
-                print_error "Invalid choice. Please enter 1 or 2."
-                ;;
+        1)
+            install_from_repo
+            break
+            ;;
+        2)
+            install_from_deb
+            break
+            ;;
+        *)
+            print_error "Invalid choice. Please enter 1 or 2."
+            ;;
         esac
     done
 
@@ -736,18 +736,18 @@ install_vscode() {
         print_warning "Note: You might need to run 'code --no-sandbox' if you encounter any issues"
         echo
         print_success "Installation completed successfully!"
-        
+
         echo -e "${BOLD}${CYAN}Usage Instructions:${NC}"
         echo -e "  ${BOLD}1.${NC} Start VSCode:          ${CYAN}code${NC}"
         echo -e "  ${BOLD}2.${NC} With GitHub Copilot:   ${CYAN}code --enable-proposed-api=github.copilot${NC}"
         echo -e "  ${BOLD}3.${NC} With custom keyring:   ${CYAN}code --password-store=gnome${NC}"
-        
+
         echo -e "\n${BOLD}${YELLOW}Available GitHub Features:${NC}"
         echo -e "  ${BOLD}•${NC} Copilot"
         echo -e "  ${BOLD}•${NC} Codespaces"
         echo -e "  ${BOLD}•${NC} Pull Requests"
         echo -e "  ${BOLD}•${NC} Issue Management"
-        
+
         echo -e "\n${BOLD}${GREEN}GitHub Commands:${NC}"
         echo -e "  ${BOLD}•${NC} Check status:    ${CYAN}gh auth status${NC}"
         echo -e "  ${BOLD}•${NC} Login again:     ${CYAN}gh auth login${NC}"
@@ -764,21 +764,21 @@ install_vscode() {
 main() {
     clear
     print_header "🚀 VSCode Installer for Termux/PRoot"
-    
+
     # Check environment first
     check_environment
-    
+
     # Check for required packages
     print_status "📦 Checking required packages..."
     local required_packages=(wget curl sudo)
     local missing_packages=()
-    
+
     for pkg in "${required_packages[@]}"; do
         if ! command -v "$pkg" &>/dev/null; then
             missing_packages+=("$pkg")
         fi
     done
-    
+
     if [ ${#missing_packages[@]} -ne 0 ]; then
         print_warning "⚠️  Missing required packages: ${missing_packages[*]}"
         if ask_user "Would you like to install them now?"; then
@@ -789,7 +789,7 @@ main() {
             exit 1
         fi
     fi
-    
+
     # Continue with installation
     if install_vscode; then
         print_success "✅ Installation completed successfully!"
@@ -798,12 +798,12 @@ main() {
         echo -e "${YELLOW}Would you like to try again? (y/n)${NC}"
         read -r choice
         case $choice in
-            [Yy]* ) return 1;;
-            * ) exit 1;;
+        [Yy]*) return 1 ;;
+        *) exit 1 ;;
         esac
     fi
-    
+
 }
 
 # Run main function
-main 
+main
