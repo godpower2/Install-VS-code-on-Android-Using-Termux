@@ -344,33 +344,31 @@ EOF
 
 # Function for repository-based installation
 install_from_repo() {
-    print_status "Installing VSCode from Microsoft Repository..."
+    print_status "📦 Installing VSCode from Microsoft Repository..."
 
     # Add Microsoft GPG key
-    print_status "Adding Microsoft GPG key..."
-    if ! wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-archive-keyring.gpg; then
+    print_status "🔑 Adding Microsoft GPG key..."
+    if ! sudo wget -qO- https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor > packages.microsoft.gpg; then
         handle_error "Failed to add Microsoft GPG key"
         return 1
     fi
+    sudo mv packages.microsoft.gpg /usr/share/keyrings/packages.microsoft.gpg
 
-    # Add VSCode repository with all architectures
-    print_status "Adding VSCode repository..."
-    echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list
+    # Add VSCode repository
+    print_status "📝 Adding VSCode repository..."
+    echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list
 
     # Update and install
-    print_status "Updating package lists..."
-    if ! apt update; then
+    print_status "🔄 Updating package lists..."
+    if ! sudo apt update; then
         handle_error "Failed to update package lists"
-        print_warning "Trying to fix package lists..."
-        rm -f /var/lib/apt/lists/* && apt update
+        return 1
     fi
 
-    print_status "Installing Visual Studio Code..."
-    if ! apt install -y code; then
+    print_status "📥 Installing Visual Studio Code..."
+    if ! sudo apt install -y code; then
         handle_error "Failed to install VSCode"
-        print_warning "Trying to fix installation..."
-        apt --fix-broken install -y
-        apt install -y code
+        return 1
     fi
 }
 
@@ -504,6 +502,150 @@ install_from_deb() {
     post_installation_setup
 }
 
+# Function to create new user
+create_user() {
+    print_header "🔐 User Account Setup"
+    
+    # Check if sudo is installed
+    if ! command -v sudo &>/dev/null; then
+        print_status "📦 Installing sudo package..."
+        apt update && apt install -y sudo
+    fi
+
+    while true; do
+        echo -e "\n${BOLD}${CYAN}👤 Enter username (lowercase, no spaces):${NC}"
+        read -r username
+        
+        # Validate username
+        if [[ ! "$username" =~ ^[a-z][a-z0-9-]{2,}$ ]]; then
+            print_error "❌ Invalid username format!"
+            print_warning "Username must:"
+            echo -e "  ${BOLD}•${NC} Start with a lowercase letter"
+            echo -e "  ${BOLD}•${NC} Contain only lowercase letters, numbers, or hyphens"
+            echo -e "  ${BOLD}•${NC} Be at least 3 characters long"
+            continue
+        fi
+        
+        # Check if user already exists
+        if id "$username" &>/dev/null; then
+            print_error "❌ User '$username' already exists!"
+            continue
+        fi
+        
+        # Get password with minimum 6 characters
+        while true; do
+            echo -e "\n${BOLD}${CYAN}🔑 Enter password for $username (min. 6 characters):${NC}"
+            read -r password
+            echo -e "${BOLD}${CYAN}🔄 Confirm password:${NC}"
+            read -r password2
+            
+            if [ "$password" != "$password2" ]; then
+                print_error "❌ Passwords don't match!"
+                continue
+            fi
+            
+            if [ ${#password} -lt 6 ]; then
+                print_error "❌ Password must be at least 6 characters!"
+                continue
+            fi
+            break
+        done
+        
+        # Create user with home directory
+        print_status "👥 Creating user account..."
+        useradd -m -s /bin/bash "$username"
+        echo "$username:$password" | chpasswd
+        
+        # Setup sudo access
+        print_status "🔑 Setting up sudo access..."
+        usermod -aG sudo "$username"
+        
+        # Configure sudoers
+        echo -e "\n${BOLD}${CYAN}🔐 Allow sudo commands without password? [Y/n]:${NC}"
+        read -r sudo_nopass
+        case $sudo_nopass in
+            [Nn]* ) 
+                echo "$username ALL=(ALL:ALL) ALL" >> /etc/sudoers
+                ;;
+            * ) 
+                echo "$username ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+                ;;
+        esac
+        
+        # Copy script to new user's home
+        local script_path=$(readlink -f "$0")
+        local script_name=$(basename "$script_path")
+        local user_home="/home/$username"
+        
+        print_status "📋 Copying installation script..."
+        cp "$script_path" "$user_home/$script_name"
+        chown "$username:$username" "$user_home/$script_name"
+        chmod +x "$user_home/$script_name"
+        
+        # Fix hostname resolution
+        hostname=$(hostname)
+        echo "127.0.0.1 $hostname" >> /etc/hosts
+        
+        print_success "✅ User account created successfully!"
+        echo -e "\n${BOLD}${CYAN}📝 Account Details:${NC}"
+        echo -e "  ${BOLD}•${NC} Username: ${GREEN}$username${NC}"
+        echo -e "  ${BOLD}•${NC} Password: ${GREEN}$password${NC}"
+        echo -e "  ${BOLD}•${NC} Sudo access: ${GREEN}Yes${NC}"
+        
+        # Switch to new user
+        print_status "👤 Switching to user $username..."
+        cd "$user_home"
+        exec su - "$username"
+        break
+    done
+}
+
+# Check user environment
+check_environment() {
+    print_header "🔍 Environment Check"
+    
+    # Check if running as root
+    if [[ $EUID -eq 0 ]]; then
+        while true; do
+            print_warning "⚠️  You are running as root!"
+            echo -e "\n${BOLD}${CYAN}Choose an option:${NC}"
+            echo -e "  ${BOLD}[1]${NC} 👤 Create a new user account ${GREEN}(recommended)${NC}"
+            echo -e "  ${BOLD}[2]${NC} ⚠️  Continue as root ${YELLOW}(not recommended)${NC}"
+            echo -e "  ${BOLD}[Q]${NC} ❌ Quit\n"
+            echo -e "${BOLD}${CYAN}Enter your choice [1/2/Q]:${NC} "
+            read -r choice
+            
+            case ${choice,,} in  # Convert to lowercase
+                1|"one"|"create"|"user")
+                    create_user
+                    break
+                    ;;
+                2|"two"|"root"|"continue")
+                    print_warning "⚠️  Continuing as root..."
+                    break
+                    ;;
+                q|"quit"|"exit"|"")
+                    print_status "👋 Installation cancelled"
+                    exit 0
+                    ;;
+                *)
+                    print_error "❌ Invalid choice! Please try again."
+                    sleep 1
+                    clear
+                    ;;
+            esac
+        done
+    fi
+    
+    # Check for sudo access
+    if ! sudo -v &>/dev/null; then
+        print_error "❌ You don't have sudo privileges!"
+        echo -e "Please run:"
+        echo -e "${CYAN}su -c 'usermod -aG sudo $USER'${NC}"
+        exit 1
+    fi
+}
+
 # Main installation function
 install_vscode() {
     clear
@@ -619,17 +761,49 @@ install_vscode() {
 }
 
 # Main script execution
-while true; do
-    install_vscode
-    if [ $? -eq 0 ]; then
-        break
+main() {
+    clear
+    print_header "🚀 VSCode Installer for Termux/PRoot"
+    
+    # Check environment first
+    check_environment
+    
+    # Check for required packages
+    print_status "📦 Checking required packages..."
+    local required_packages=(wget curl sudo)
+    local missing_packages=()
+    
+    for pkg in "${required_packages[@]}"; do
+        if ! command -v "$pkg" &>/dev/null; then
+            missing_packages+=("$pkg")
+        fi
+    done
+    
+    if [ ${#missing_packages[@]} -ne 0 ]; then
+        print_warning "⚠️  Missing required packages: ${missing_packages[*]}"
+        if ask_user "Would you like to install them now?"; then
+            sudo apt update
+            sudo apt install -y "${missing_packages[@]}"
+        else
+            print_error "❌ Cannot proceed without required packages"
+            exit 1
+        fi
+    fi
+    
+    # Continue with installation
+    if install_vscode; then
+        print_success "✅ Installation completed successfully!"
     else
         echo
         echo -e "${YELLOW}Would you like to try again? (y/n)${NC}"
         read -r choice
         case $choice in
-            [Yy]* ) continue;;
+            [Yy]* ) return 1;;
             * ) exit 1;;
         esac
     fi
-done 
+    
+}
+
+# Run main function
+main 
